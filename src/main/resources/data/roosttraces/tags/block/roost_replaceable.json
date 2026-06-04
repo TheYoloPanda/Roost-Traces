@@ -1,0 +1,14 @@
+{
+  "replace": false,
+  "values": [
+    "iceandfire:crackled_dirt",
+    "iceandfire:crackled_gravel",
+    "iceandfire:crackled_cobblestone",
+    "iceandfire:chared_dirt",
+    "iceandfire:chared_gravel",
+    "iceandfire:chared_cobblestone",
+    "iceandfire:frozen_dirt",
+    "iceandfire:frozen_gravel",
+    "iceandfire:frozen_cobblestone"
+  ]
+}

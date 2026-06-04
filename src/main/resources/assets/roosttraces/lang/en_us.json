@@ -1,0 +1,13 @@
+{
+  "itemGroup.roosttraces": "Example Mod Tab",
+  "block.roosttraces.example_block": "Example Block",
+  "item.roosttraces.example_item": "Example Item",
+
+  "roosttraces.configuration.title": "Roost Traces Configs",
+  "roosttraces.configuration.section.roosttraces.common.toml": "Roost Traces Configs",
+  "roosttraces.configuration.section.roosttraces.common.toml.title": "Roost Traces Configs",
+  "roosttraces.configuration.items": "Item List",
+  "roosttraces.configuration.logDirtBlock": "Log Dirt Block",
+  "roosttraces.configuration.magicNumberIntroduction": "Magic Number Text",
+  "roosttraces.configuration.magicNumber": "Magic Number"
+}

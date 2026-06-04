@@ -1,0 +1,15 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+includeBuild("C:/Users/TYP/Documents/repos/CreateReAutomated-Traces-main") {
+    dependencySubstitution {
+        substitute module("com.typ.traces:createreautomatedtraces") using project(":")
+    }
+}

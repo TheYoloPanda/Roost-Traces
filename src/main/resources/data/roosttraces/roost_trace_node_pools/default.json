@@ -1,0 +1,16 @@
+{
+  "inherit_default": true,
+  "default": [
+    "#roosttraces:create_reautomated_nodes",
+    "#roosttraces:custom_nodes"
+  ],
+  "fire": [
+    "#roosttraces:fire_roost_nodes"
+  ],
+  "ice": [
+    "#roosttraces:ice_roost_nodes"
+  ],
+  "lightning": [
+    "#roosttraces:lightning_roost_nodes"
+  ]
+}
