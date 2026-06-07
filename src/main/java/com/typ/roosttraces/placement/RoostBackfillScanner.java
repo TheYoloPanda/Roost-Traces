@@ -68,7 +68,10 @@ public final class RoostBackfillScanner {
         ScanStats stats = scanDetectorBlocks(level, chunk);
         if (stats.count < MIN_DETECTOR_BLOCKS) return;
 
-        BlockPos pivot = new BlockPos(stats.sumX / stats.count, stats.sumY / stats.count, stats.sumZ / stats.count);
+        BlockPos pivot = new BlockPos(
+                (int) (stats.sumX / stats.count),
+                (int) (stats.sumY / stats.count),
+                (int) (stats.sumZ / stats.count));
         RoostType type = stats.bestType();
         if (type == RoostType.UNKNOWN) return;
 
@@ -121,9 +124,9 @@ public final class RoostBackfillScanner {
         int fire;
         int ice;
         int lightning;
-        int sumX;
-        int sumY;
-        int sumZ;
+        long sumX;
+        long sumY;
+        long sumZ;
 
         void accept(BlockPos pos, ResourceLocation blockId) {
             count++;

@@ -20,13 +20,15 @@ public final class RoostTracePlacementScheduler {
 
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
-        if (!RoostTracesConfig.PLACEMENT_ENABLED.get() || !RoostTracesConfig.PLACE_AFTER_CHUNK_GENERATED.get()) return;
+        if (!RoostTracesConfig.PLACEMENT_ENABLED.get()) return;
 
         MinecraftServer server = event.getServer();
-        int remaining = RoostTracesConfig.MAX_PENDING_ROOSTS_PER_TICK.get();
-        for (ServerLevel level : server.getAllLevels()) {
-            if (remaining <= 0) break;
-            remaining = processLevel(level, remaining);
+        if (RoostTracesConfig.PLACE_AFTER_CHUNK_GENERATED.get() || RoostTracesConfig.ENABLE_BACKFILL.get()) {
+            int remaining = RoostTracesConfig.MAX_PENDING_ROOSTS_PER_TICK.get();
+            for (ServerLevel level : server.getAllLevels()) {
+                if (remaining <= 0) break;
+                remaining = processLevel(level, remaining);
+            }
         }
         RoostBackfillScanner.process(server);
     }

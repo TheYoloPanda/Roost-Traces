@@ -61,23 +61,17 @@ public final class RoostTraceNodePoolResolver {
             }
             Optional<Block> traceBlock = TraceCompat.traceBlockFor(nodeBlock);
             if (traceBlock.isEmpty()) {
-                if (RoostTracesConfig.REQUIRE_TRACE_DATA_MAP.get()) {
-                    TraceCompat.warnMissingTraceData(nodeId);
-                    continue;
-                }
+                TraceCompat.warnMissingTraceData(nodeId);
+                continue;
             }
             Block host = TraceCompat.hostBlockFor(nodeBlock);
             if (host == null) {
                 RoostTraces.LOGGER.warn("No host block could be resolved for {}, skipping roost trace placement", nodeId);
                 continue;
             }
-            resolved.add(new TraceNodeChoice(nodeId, nodeBlock, traceBlock.orElse(host), host));
+            resolved.add(new TraceNodeChoice(nodeId, nodeBlock));
         }
         return List.copyOf(resolved);
-    }
-
-    public static boolean isPoolNode(Block block, RoostType type) {
-        return resolve(type).stream().anyMatch(choice -> choice.nodeBlock() == block);
     }
 
     private static void expandSelectors(List<String> selectors, Map<ResourceLocation, Block> output) {

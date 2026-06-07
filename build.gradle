@@ -132,11 +132,11 @@ dependencies {
     // Required runtime mods for the development client. mods.toml declares load
     // requirements; these Gradle entries are what actually put jars on the run classpath.
     localRuntime "maven.modrinth:iceandfire-ce:${iceandfire_version}"
-    localRuntime "maven.modrinth:uranus:${uranus_version}"
+    localRuntime "maven.modrinth:uranus:${uranus_modrinth_version_id}"
     localRuntime "maven.modrinth:jupiter:${jupiter_version}"
 
     localRuntime "maven.modrinth:create-reautomated:${createreautomated_version}"
-    localRuntime "com.typ.traces:createreautomatedtraces:${createreautomatedtraces_version}"
+    localRuntime "maven.modrinth:create-reautomated-traces:${createreautomatedtraces_version}"
 
     localRuntime("com.simibubi.create:create-${minecraft_version}:${create_version}:slim") { transitive = false }
     localRuntime "net.createmod.ponder:ponder-neoforge:${ponder_version}+mc${minecraft_version}"
@@ -184,6 +184,7 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+    options.compilerArgs.add('-Xlint:deprecation')
 }
 
 // IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.

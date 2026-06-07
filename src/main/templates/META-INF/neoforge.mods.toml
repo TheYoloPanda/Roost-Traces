@@ -91,21 +91,21 @@ config="${mod_id}.mixins.json"
 [[dependencies.${mod_id}]]
     modId="iceandfire"
     type="required"
-    versionRange="[2.0-beta.17,)"
+    versionRange="[2.0-beta.17,2.1)"
     ordering="AFTER"
     side="BOTH"
 
 [[dependencies.${mod_id}]]
     modId="createreautomated"
     type="required"
-    versionRange="[0.2.0,)"
+    versionRange="[0.2.0,0.3.0)"
     ordering="AFTER"
     side="BOTH"
 
 [[dependencies.${mod_id}]]
     modId="createreautomatedtraces"
     type="required"
-    versionRange="[0.2.0,)"
+    versionRange="[0.2.0,0.3.0)"
     ordering="AFTER"
     side="BOTH"
 

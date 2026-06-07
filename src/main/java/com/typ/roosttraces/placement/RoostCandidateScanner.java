@@ -49,10 +49,6 @@ public final class RoostCandidateScanner {
         return Optional.empty();
     }
 
-    public static boolean canReplaceRoostBlock(ServerLevel level, BlockPos pos) {
-        return isRoostReplaceable(level.getBlockState(pos));
-    }
-
     public static boolean canClear(ServerLevel level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
         return state.isAir() || isClearable(state) || isRoostReplaceable(state);
@@ -61,20 +57,26 @@ public final class RoostCandidateScanner {
     private static boolean isValidNodePosition(ServerLevel level, BlockPos pos) {
         if (level.getBlockEntity(pos) != null) return false;
         BlockState state = level.getBlockState(pos);
-        return isRoostReplaceable(state);
+        return isRoostReplaceable(state) || isReplaceablePile(state);
     }
 
     private static boolean isValidClearancePosition(ServerLevel level, BlockPos pos) {
         if (level.getBlockEntity(pos) != null) return false;
         BlockState state = level.getBlockState(pos);
         if (state.getFluidState().isSource()) return false;
-        return state.isAir() || isClearable(state) || isRoostReplaceable(state);
+        return state.isAir() || isClearable(state) || isRoostReplaceable(state) || isReplaceablePile(state);
     }
 
     private static boolean isRoostReplaceable(BlockState state) {
         if (state.is(RoostTraceTags.ROOST_REPLACEABLE)) return true;
         ResourceLocation id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
         return RoostTracesConfig.replaceableIds().contains(id);
+    }
+
+    private static boolean isReplaceablePile(BlockState state) {
+        if (!RoostTracesConfig.ALLOW_PILE_REPLACEMENT.get()) return false;
+        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+        return id.getNamespace().equals("iceandfire") && id.getPath().endsWith("_pile");
     }
 
     private static boolean isClearable(BlockState state) {

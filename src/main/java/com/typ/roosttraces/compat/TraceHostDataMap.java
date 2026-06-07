@@ -34,7 +34,7 @@ public final class TraceHostDataMap {
     }
 
     public static Block hostBlockFor(Block node) {
-        HostBlockEntry entry = node.builtInRegistryHolder().getData(TYPE);
+        HostBlockEntry entry = BuiltInRegistries.BLOCK.wrapAsHolder(node).getData(TYPE);
         return entry == null ? null : entry.hostBlock();
     }
 }

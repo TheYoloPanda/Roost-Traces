@@ -13,7 +13,6 @@ import com.typ.roosttraces.pool.TraceNodeChoice;
 import com.typ.roosttraces.roost.PendingRoost;
 import com.typ.roosttraces.roost.PlacedRoost;
 import com.typ.roosttraces.roost.RoostTraceSavedData;
-import com.typ.roosttraces.roost.RoostType;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -34,8 +33,19 @@ public final class RoostTraceNodePlacer {
         List<TraceNodeChoice> pool = RoostTraceNodePoolResolver.resolve(pending.type());
         if (pool.isEmpty()) return PlacementResult.NO_NODE_POOL;
 
-        if (hasExistingPair(level, pending.pivot(), pending.type(), pool)) {
-            data.removePending(pending.key());
+        Optional<ExistingPair> existingPair = findExistingPair(level, pending.pivot(), pool);
+        if (existingPair.isPresent()) {
+            ExistingPair pair = existingPair.get();
+            if (!pair.indexed() && !TraceCompat.recordTrace(level, pair.tracePos(), pair.nodeId())) {
+                return PlacementResult.TRACE_INDEX_FAILED;
+            }
+            data.markPlaced(new PlacedRoost(
+                    pending.key(),
+                    pending.type(),
+                    pending.pivotLong(),
+                    pair.tracePos().asLong(),
+                    pair.nodePos().asLong(),
+                    pair.nodeId()));
             return PlacementResult.ALREADY_EXISTS;
         }
 
@@ -44,11 +54,13 @@ public final class RoostTraceNodePlacer {
         if (candidate.isEmpty()) return PlacementResult.NO_CANDIDATE;
 
         RoostCandidate found = candidate.get();
-        if (!placeNodeOnly(level, found.nodePos(), choice)) {
+        Optional<NodePlacement> placement = placeNodeOnly(level, found.nodePos(), choice);
+        if (placement.isEmpty()) {
             return PlacementResult.PLACEMENT_FAILED;
         }
 
         if (!TraceCompat.recordTrace(level, found.tracePos(), choice.nodeId())) {
+            placement.get().rollback(level);
             return PlacementResult.TRACE_INDEX_FAILED;
         }
 
@@ -69,17 +81,31 @@ public final class RoostTraceNodePlacer {
         return PlacementResult.PLACED;
     }
 
-    private static boolean placeNodeOnly(ServerLevel level, BlockPos nodePos, TraceNodeChoice choice) {
+    private static Optional<NodePlacement> placeNodeOnly(ServerLevel level, BlockPos nodePos, TraceNodeChoice choice) {
         BlockState nodeState = TraceCompat.naturalNodeState(choice.nodeBlock());
         BlockState air = Blocks.AIR.defaultBlockState();
+        BlockState previousNode = level.getBlockState(nodePos);
 
         BlockPos aboveNode = nodePos.above();
-        if (!level.getBlockState(aboveNode).isAir() && RoostCandidateScanner.canClear(level, aboveNode)) {
+        BlockState previousAbove = level.getBlockState(aboveNode);
+        boolean clearedAbove = false;
+        if (!previousAbove.isAir() && RoostCandidateScanner.canClear(level, aboveNode)) {
             level.setBlock(aboveNode, air, PLACE_FLAGS);
+            clearedAbove = true;
         }
 
         level.setBlock(nodePos, nodeState, PLACE_FLAGS);
-        return level.getBlockState(nodePos).is(choice.nodeBlock());
+        NodePlacement placement = new NodePlacement(
+                nodePos.immutable(),
+                previousNode,
+                aboveNode.immutable(),
+                previousAbove,
+                clearedAbove);
+        if (!level.getBlockState(nodePos).is(choice.nodeBlock())) {
+            placement.rollback(level);
+            return Optional.empty();
+        }
+        return Optional.of(placement);
     }
 
     private static TraceNodeChoice choose(List<TraceNodeChoice> pool, long seed) {
@@ -87,11 +113,20 @@ public final class RoostTraceNodePlacer {
         return pool.get(index);
     }
 
-    private static boolean hasExistingPair(ServerLevel level, BlockPos pivot, RoostType type, List<TraceNodeChoice> pool) {
+    private static Optional<ExistingPair> findExistingPair(ServerLevel level, BlockPos pivot, List<TraceNodeChoice> pool) {
         int radius = RoostTracesConfig.EXISTING_PAIR_RADIUS.get();
         Set<ResourceLocation> nodeIds = new HashSet<>();
         for (TraceNodeChoice choice : pool) nodeIds.add(choice.nodeId());
-        if (TraceCompat.hasRecordedTraceInRange(level, pivot, radius, nodeIds)) return true;
+        Optional<TraceCompat.RecordedTrace> recordedTrace = TraceCompat.findRecordedTraceInRange(level, pivot, radius, nodeIds);
+        if (recordedTrace.isPresent()) {
+            TraceCompat.RecordedTrace trace = recordedTrace.get();
+            Block blockAtTrace = level.getBlockState(trace.pos()).getBlock();
+            for (TraceNodeChoice choice : pool) {
+                if (choice.nodeId().equals(trace.nodeId()) && choice.nodeBlock() == blockAtTrace) {
+                    return Optional.of(new ExistingPair(trace.nodeId(), trace.pos(), trace.pos(), true));
+                }
+            }
+        }
 
         int radiusSq = radius * radius;
         int minY = Math.max(level.getMinBuildHeight(), pivot.getY() - 12);
@@ -107,12 +142,33 @@ public final class RoostTraceNodePlacer {
                     cur.set(x, y, z);
                     Block block = level.getBlockState(cur).getBlock();
                     for (TraceNodeChoice choice : pool) {
-                        if (choice.nodeBlock() == block) return true;
+                        if (choice.nodeBlock() == block && RoostCandidateScanner.canClear(level, cur.above())) {
+                            BlockPos found = cur.immutable();
+                            return Optional.of(new ExistingPair(choice.nodeId(), found, found, false));
+                        }
                     }
                 }
             }
         }
-        return false;
+        return Optional.empty();
+    }
+
+    private record ExistingPair(ResourceLocation nodeId, BlockPos tracePos, BlockPos nodePos, boolean indexed) {
+    }
+
+    private record NodePlacement(
+            BlockPos nodePos,
+            BlockState previousNode,
+            BlockPos abovePos,
+            BlockState previousAbove,
+            boolean clearedAbove) {
+
+        void rollback(ServerLevel level) {
+            level.setBlock(nodePos, previousNode, PLACE_FLAGS);
+            if (clearedAbove) {
+                level.setBlock(abovePos, previousAbove, PLACE_FLAGS);
+            }
+        }
     }
 
     public enum PlacementResult {

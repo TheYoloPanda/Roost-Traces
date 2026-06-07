@@ -4,7 +4,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -29,6 +29,9 @@ public final class TraceCompat {
     private static volatile Method forEachInRange;
 
     private TraceCompat() {}
+
+    public record RecordedTrace(ResourceLocation nodeId, BlockPos pos) {
+    }
 
     @SuppressWarnings("unchecked")
     public static Optional<Block> traceBlockFor(Block nodeBlock) {
@@ -78,7 +81,7 @@ public final class TraceCompat {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public static boolean hasRecordedTraceInRange(ServerLevel level, BlockPos pivot, int radiusBlocks, Set<ResourceLocation> nodeIds) {
+    public static Optional<RecordedTrace> findRecordedTraceInRange(ServerLevel level, BlockPos pivot, int radiusBlocks, Set<ResourceLocation> nodeIds) {
         try {
             Method method = forEachInRange;
             if (method == null) {
@@ -92,25 +95,31 @@ public final class TraceCompat {
                 forEachInRange = method;
             }
 
-            AtomicBoolean found = new AtomicBoolean(false);
+            AtomicReference<RecordedTrace> found = new AtomicReference<>();
             Predicate<ResourceLocation> filter = nodeIds::contains;
             Consumer consumer = record -> {
-                if (found.get()) return;
+                if (found.get() != null) return;
                 try {
                     Method posMethod = record.getClass().getMethod("pos");
+                    Method nodeIdMethod = record.getClass().getMethod("nodeId");
                     Object posValue = posMethod.invoke(record);
+                    Object nodeIdValue = nodeIdMethod.invoke(record);
                     if (posValue instanceof BlockPos pos && withinHorizontalRadius(pivot, pos, radiusBlocks)) {
-                        found.set(true);
+                        if (nodeIdValue instanceof ResourceLocation nodeId) {
+                            found.set(new RecordedTrace(nodeId, pos.immutable()));
+                        }
                     }
                 } catch (ReflectiveOperationException ignored) {
-                    found.set(true);
+                    if (!nodeIds.isEmpty()) {
+                        found.set(new RecordedTrace(nodeIds.iterator().next(), pivot.immutable()));
+                    }
                 }
             };
             int radiusChunks = Math.max(1, (radiusBlocks + 15) >> 4);
             method.invoke(null, level, new ChunkPos(pivot), radiusChunks, filter, consumer);
-            return found.get();
+            return Optional.ofNullable(found.get());
         } catch (ReflectiveOperationException e) {
-            return false;
+            return Optional.empty();
         }
     }
 
