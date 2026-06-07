@@ -1,6 +1,5 @@
 package com.typ.roosttraces.compat;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Optional;
 import java.util.Set;
@@ -16,7 +15,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class TraceCompat {
@@ -24,7 +22,6 @@ public final class TraceCompat {
     private static final String TRACE_INDEX = "com.typ.traces.index.TraceIndex";
 
     private static volatile Method traceBlockFor;
-    private static volatile Method warnMissingOnce;
     private static volatile Method recordTrace;
     private static volatile Method forEachInRange;
 
@@ -49,19 +46,6 @@ public final class TraceCompat {
             RoostTraces.LOGGER.warn("Unable to call TraceBlockDataMap.traceBlockFor; Create ReAutomated: Traces API not available", e);
         }
         return Optional.empty();
-    }
-
-    public static void warnMissingTraceData(ResourceLocation nodeId) {
-        try {
-            Method method = warnMissingOnce;
-            if (method == null) {
-                method = Class.forName(TRACE_BLOCK_DATA_MAP).getMethod("warnMissingOnce", ResourceLocation.class);
-                warnMissingOnce = method;
-            }
-            method.invoke(null, nodeId);
-        } catch (ReflectiveOperationException e) {
-            RoostTraces.LOGGER.warn("No trace_block_for_node mapping for {}, skipping roost trace placement", nodeId);
-        }
     }
 
     public static boolean recordTrace(ServerLevel level, BlockPos tracePos, ResourceLocation nodeId) {
@@ -123,32 +107,6 @@ public final class TraceCompat {
         }
     }
 
-    public static Block hostBlockFor(Block nodeBlock) {
-        Block host = hostFromOreNodeBaseRock(nodeBlock);
-        if (host != null) return smoothify(host);
-
-        host = TraceHostDataMap.hostBlockFor(nodeBlock);
-        if (host != null) return smoothify(host);
-
-        if (RoostTracesConfig.ALLOW_STONE_FALLBACK_FOR_CUSTOM_NODES.get()) {
-            return Blocks.STONE;
-        }
-        return null;
-    }
-
-    public static boolean isInfiniteNode(Block nodeBlock) {
-        try {
-            Method method = nodeBlock.getClass().getMethod("isInfinite");
-            Object value = method.invoke(nodeBlock);
-            return value instanceof Boolean result && result;
-        } catch (NoSuchMethodException ignored) {
-            String className = nodeBlock.getClass().getName();
-            return className.equals("com.github.zgraund.createreautomated.block.InfiniteNodeBlock");
-        } catch (ReflectiveOperationException e) {
-            return false;
-        }
-    }
-
     public static BlockState naturalNodeState(Block nodeBlock) {
         try {
             Method method = nodeBlock.getClass().getMethod("unstable");
@@ -161,28 +119,6 @@ public final class TraceCompat {
                     net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(nodeBlock));
         }
         return nodeBlock.defaultBlockState();
-    }
-
-    private static Block hostFromOreNodeBaseRock(Block nodeBlock) {
-        Class<?> current = nodeBlock.getClass();
-        while (current != null && current != Object.class) {
-            try {
-                Field field = current.getField("baseRock");
-                Object value = field.get(nodeBlock);
-                if (value instanceof BlockState state) return state.getBlock();
-            } catch (NoSuchFieldException ignored) {
-                current = current.getSuperclass();
-            } catch (IllegalAccessException e) {
-                return null;
-            }
-        }
-        return null;
-    }
-
-    private static Block smoothify(Block raw) {
-        if (raw == Blocks.COBBLESTONE) return Blocks.STONE;
-        if (raw == Blocks.COBBLED_DEEPSLATE) return Blocks.DEEPSLATE;
-        return raw;
     }
 
     private static boolean withinHorizontalRadius(BlockPos pivot, BlockPos pos, int radius) {

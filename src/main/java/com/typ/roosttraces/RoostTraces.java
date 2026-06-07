@@ -1,8 +1,6 @@
 package com.typ.roosttraces;
 
 import com.mojang.logging.LogUtils;
-import com.typ.roosttraces.compat.TraceHostDataMap;
-import com.typ.roosttraces.placement.RoostBackfillScanner;
 import com.typ.roosttraces.placement.RoostTracePlacementScheduler;
 import com.typ.roosttraces.pool.RoostTraceNodePoolResolver;
 import org.slf4j.Logger;
@@ -21,10 +19,8 @@ public class RoostTraces {
     public RoostTraces(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.COMMON, RoostTracesConfig.SPEC);
         modEventBus.addListener(RoostTracesConfig::onLoad);
-        modEventBus.addListener(TraceHostDataMap::register);
 
         NeoForge.EVENT_BUS.addListener(RoostTraceNodePoolResolver::onAddReloadListener);
         NeoForge.EVENT_BUS.register(RoostTracePlacementScheduler.class);
-        NeoForge.EVENT_BUS.register(RoostBackfillScanner.class);
     }
 }

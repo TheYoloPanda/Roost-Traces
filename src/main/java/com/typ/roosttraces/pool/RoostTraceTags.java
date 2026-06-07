@@ -9,9 +9,7 @@ import net.minecraft.world.level.block.Block;
 
 public final class RoostTraceTags {
     public static final TagKey<Block> ROOST_REPLACEABLE = roostTag("roost_replaceable");
-    public static final TagKey<Block> ROOST_DETECTOR = roostTag("roost_detector");
     public static final TagKey<Block> CREATE_REAUTOMATED_NODES = roostTag("create_reautomated_nodes");
-    public static final TagKey<Block> CUSTOM_NODES = roostTag("custom_nodes");
     public static final TagKey<Block> FIRE_ROOST_NODES = roostTag("fire_roost_nodes");
     public static final TagKey<Block> ICE_ROOST_NODES = roostTag("ice_roost_nodes");
     public static final TagKey<Block> LIGHTNING_ROOST_NODES = roostTag("lightning_roost_nodes");

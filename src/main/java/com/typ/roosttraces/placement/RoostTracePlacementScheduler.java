@@ -24,14 +24,13 @@ public final class RoostTracePlacementScheduler {
         if (!RoostTracesConfig.PLACEMENT_ENABLED.get()) return;
 
         MinecraftServer server = event.getServer();
-        if (RoostTracesConfig.PLACE_AFTER_CHUNK_GENERATED.get() || RoostTracesConfig.ENABLE_BACKFILL.get()) {
+        if (RoostTracesConfig.PLACE_AFTER_CHUNK_GENERATED.get()) {
             int remaining = RoostTracesConfig.MAX_PENDING_ROOSTS_PER_TICK.get();
             for (ServerLevel level : server.getAllLevels()) {
                 if (remaining <= 0) break;
                 remaining = processLevel(level, remaining);
             }
         }
-        RoostBackfillScanner.process(server);
     }
 
     private static int processLevel(ServerLevel level, int remainingBudget) {

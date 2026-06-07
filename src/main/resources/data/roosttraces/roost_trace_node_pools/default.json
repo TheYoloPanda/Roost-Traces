@@ -1,8 +1,7 @@
 {
   "inherit_default": true,
   "default": [
-    "#roosttraces:create_reautomated_nodes",
-    "#roosttraces:custom_nodes"
+    "#roosttraces:create_reautomated_nodes"
   ],
   "fire": [
     "#roosttraces:fire_roost_nodes"

@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
+import java.util.Map;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -24,6 +24,8 @@ import net.minecraft.server.packs.resources.SimpleJsonResourceReloadListener;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
 import net.neoforged.neoforge.event.AddReloadListenerEvent;
 
 public final class RoostTraceNodePoolResolver {
@@ -41,7 +43,7 @@ public final class RoostTraceNodePoolResolver {
                 ? config
                 : NodeSelectorConfig.defaults();
 
-        Map<ResourceLocation, Block> candidates = new LinkedHashMap<>();
+        Map<ResourceLocation, TraceNodeChoice> candidates = new LinkedHashMap<>();
         if (snapshot.inheritDefault() && RoostTracesConfig.INHERIT_DEFAULT_POOL.get()) {
             expandSelectors(snapshot.defaultSelectors(), candidates);
         }
@@ -50,32 +52,10 @@ public final class RoostTraceNodePoolResolver {
             expandSelectors(snapshot.defaultSelectors(), candidates);
         }
 
-        List<TraceNodeChoice> resolved = new ArrayList<>();
-        for (Map.Entry<ResourceLocation, Block> entry : candidates.entrySet()) {
-            ResourceLocation nodeId = entry.getKey();
-            Block nodeBlock = entry.getValue();
-            if (TraceCompat.isInfiniteNode(nodeBlock)) {
-                if (RoostTracesConfig.DEBUG.get()) {
-                    RoostTraces.LOGGER.warn("Skipping infinite roost trace node {}", nodeId);
-                }
-                continue;
-            }
-            Optional<Block> traceBlock = TraceCompat.traceBlockFor(nodeBlock);
-            if (traceBlock.isEmpty()) {
-                TraceCompat.warnMissingTraceData(nodeId);
-                continue;
-            }
-            Block host = TraceCompat.hostBlockFor(nodeBlock);
-            if (host == null) {
-                RoostTraces.LOGGER.warn("No host block could be resolved for {}, skipping roost trace placement", nodeId);
-                continue;
-            }
-            resolved.add(new TraceNodeChoice(nodeId, nodeBlock));
-        }
-        return List.copyOf(resolved);
+        return List.copyOf(candidates.values());
     }
 
-    private static void expandSelectors(List<String> selectors, Map<ResourceLocation, Block> output) {
+    private static void expandSelectors(List<String> selectors, Map<ResourceLocation, TraceNodeChoice> output) {
         for (String selector : selectors) {
             if (selector == null || selector.isBlank()) continue;
             if (selector.startsWith("#")) {
@@ -88,24 +68,94 @@ public final class RoostTraceNodePoolResolver {
                 BuiltInRegistries.BLOCK.getTag(tag).ifPresent(named ->
                         named.forEach(holder -> addHolder(holder, output)));
             } else {
-                ResourceLocation id = ResourceLocation.tryParse(selector);
-                if (id == null) {
-                    RoostTraces.LOGGER.warn("Invalid roost trace node selector: {}", selector);
-                    continue;
-                }
-                if (!BuiltInRegistries.BLOCK.containsKey(id)) {
-                    RoostTraces.LOGGER.warn("Unknown roost trace node block id: {}", id);
-                    continue;
-                }
-                output.putIfAbsent(id, BuiltInRegistries.BLOCK.get(id));
+                parseDirectSelector(selector).ifPresent(choice -> output.put(choice.nodeId(), choice));
             }
         }
     }
 
-    private static void addHolder(Holder<Block> holder, Map<ResourceLocation, Block> output) {
+    private static Optional<TraceNodeChoice> parseDirectSelector(String selector) {
+        SelectorParts parts = splitSelector(selector);
+        ResourceLocation id = ResourceLocation.tryParse(parts.blockId());
+        if (id == null) {
+            RoostTraces.LOGGER.warn("Invalid roost trace node selector: {}", selector);
+            return Optional.empty();
+        }
+        if (!BuiltInRegistries.BLOCK.containsKey(id)) {
+            RoostTraces.LOGGER.warn("Unknown roost trace node block id: {}", id);
+            return Optional.empty();
+        }
+
+        Block block = BuiltInRegistries.BLOCK.get(id);
+        BlockState state = TraceCompat.naturalNodeState(block);
+        if (parts.properties() != null) {
+            Optional<BlockState> parsed = applyProperties(selector, state, parts.properties());
+            if (parsed.isEmpty()) return Optional.empty();
+            state = parsed.get();
+        }
+        return Optional.of(new TraceNodeChoice(id, block, state));
+    }
+
+    private static SelectorParts splitSelector(String selector) {
+        int stateStart = selector.indexOf('[');
+        if (stateStart < 0) {
+            if (selector.indexOf('{') >= 0) {
+                RoostTraces.LOGGER.warn("Invalid roost trace node selector {}; use blockstate syntax like mod:block[stable=false]", selector);
+            }
+            return new SelectorParts(selector, null);
+        }
+        if (!selector.endsWith("]")) {
+            RoostTraces.LOGGER.warn("Invalid roost trace node selector: {}", selector);
+            return new SelectorParts(selector, null);
+        }
+        return new SelectorParts(
+                selector.substring(0, stateStart),
+                selector.substring(stateStart + 1, selector.length() - 1));
+    }
+
+    private static Optional<BlockState> applyProperties(String selector, BlockState state, String properties) {
+        if (properties.isBlank()) return Optional.of(state);
+
+        for (String rawPair : properties.split(",")) {
+            String[] pair = rawPair.split("=", 2);
+            if (pair.length != 2 || pair[0].isBlank() || pair[1].isBlank()) {
+                RoostTraces.LOGGER.warn("Invalid blockstate property in roost trace node selector: {}", selector);
+                return Optional.empty();
+            }
+
+            Property<?> property = state.getBlock().getStateDefinition().getProperty(pair[0].trim());
+            if (property == null) {
+                RoostTraces.LOGGER.warn("Unknown blockstate property '{}' in roost trace node selector: {}", pair[0].trim(), selector);
+                return Optional.empty();
+            }
+
+            Optional<BlockState> updated = setProperty(selector, state, property, pair[1].trim());
+            if (updated.isEmpty()) return Optional.empty();
+            state = updated.get();
+        }
+        return Optional.of(state);
+    }
+
+    private static <T extends Comparable<T>> Optional<BlockState> setProperty(
+            String selector,
+            BlockState state,
+            Property<T> property,
+            String rawValue) {
+        Optional<T> value = property.getValue(rawValue);
+        if (value.isEmpty()) {
+            RoostTraces.LOGGER.warn("Invalid value '{}' for blockstate property '{}' in roost trace node selector: {}",
+                    rawValue, property.getName(), selector);
+            return Optional.empty();
+        }
+        return Optional.of(state.setValue(property, value.get()));
+    }
+
+    private static void addHolder(Holder<Block> holder, Map<ResourceLocation, TraceNodeChoice> output) {
         Block block = holder.value();
         ResourceLocation id = BuiltInRegistries.BLOCK.getKey(block);
-        output.putIfAbsent(id, block);
+        output.putIfAbsent(id, new TraceNodeChoice(id, block, TraceCompat.naturalNodeState(block)));
+    }
+
+    private record SelectorParts(String blockId, String properties) {
     }
 
     private static final class Listener extends SimpleJsonResourceReloadListener {

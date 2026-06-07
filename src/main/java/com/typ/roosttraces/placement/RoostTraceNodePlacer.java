@@ -82,7 +82,7 @@ public final class RoostTraceNodePlacer {
     }
 
     private static Optional<NodePlacement> placeNodeOnly(ServerLevel level, BlockPos nodePos, TraceNodeChoice choice) {
-        BlockState nodeState = TraceCompat.naturalNodeState(choice.nodeBlock());
+        BlockState nodeState = choice.nodeState();
         BlockState air = Blocks.AIR.defaultBlockState();
         BlockState previousNode = level.getBlockState(nodePos);
 

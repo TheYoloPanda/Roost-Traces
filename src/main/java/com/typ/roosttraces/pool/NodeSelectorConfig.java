@@ -14,7 +14,7 @@ public record NodeSelectorConfig(
     public static NodeSelectorConfig defaults() {
         return new NodeSelectorConfig(
                 true,
-                List.of("#roosttraces:create_reautomated_nodes", "#roosttraces:custom_nodes"),
+                List.of("#roosttraces:create_reautomated_nodes"),
                 List.of("#roosttraces:fire_roost_nodes"),
                 List.of("#roosttraces:ice_roost_nodes"),
                 List.of("#roosttraces:lightning_roost_nodes"));
