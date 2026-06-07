@@ -81,7 +81,9 @@ public final class RoostTracesConfig {
     private RoostTracesConfig() {}
 
     public static void onLoad(ModConfigEvent event) {
-        rebuildCaches();
+        if (event.getConfig().getSpec() == SPEC) {
+            rebuildCaches();
+        }
     }
 
     public static Set<ResourceLocation> replaceableIds() {

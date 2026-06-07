@@ -132,7 +132,7 @@ dependencies {
     // Required runtime mods for the development client. mods.toml declares load
     // requirements; these Gradle entries are what actually put jars on the run classpath.
     localRuntime "maven.modrinth:iceandfire-ce:${iceandfire_version}"
-    localRuntime "maven.modrinth:uranus:${uranus_modrinth_version_id}"
+    localRuntime "maven.modrinth:uranus:${uranus_neoforge_modrinth_maven_version}"
     localRuntime "maven.modrinth:jupiter:${jupiter_version}"
 
     localRuntime "maven.modrinth:create-reautomated:${createreautomated_version}"

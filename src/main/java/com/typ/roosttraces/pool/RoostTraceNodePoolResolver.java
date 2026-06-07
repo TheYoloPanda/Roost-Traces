@@ -14,6 +14,7 @@ import com.typ.roosttraces.RoostTraces;
 import com.typ.roosttraces.RoostTracesConfig;
 import com.typ.roosttraces.compat.TraceCompat;
 import com.typ.roosttraces.roost.RoostType;
+import org.jetbrains.annotations.NotNull;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -113,7 +114,10 @@ public final class RoostTraceNodePoolResolver {
         }
 
         @Override
-        protected void apply(Map<ResourceLocation, JsonElement> resources, ResourceManager manager, ProfilerFiller profiler) {
+        protected void apply(
+                @NotNull Map<ResourceLocation, JsonElement> resources,
+                @NotNull ResourceManager manager,
+                @NotNull ProfilerFiller profiler) {
             if (resources.isEmpty()) {
                 config = NodeSelectorConfig.defaults();
                 return;
@@ -125,7 +129,7 @@ public final class RoostTraceNodePoolResolver {
                     RoostTraces.LOGGER.warn("Ignoring roost node pool {} because it is not a JSON object", entry.getKey());
                     continue;
                 }
-                parsed = parse(entry.getKey(), entry.getValue().getAsJsonObject(), parsed);
+                parsed = parse(entry.getValue().getAsJsonObject(), parsed);
             }
             config = parsed;
             RoostTraces.LOGGER.info("Loaded roost trace node pools: inheritDefault={}, default={}, fire={}, ice={}, lightning={}",
@@ -136,7 +140,7 @@ public final class RoostTraceNodePoolResolver {
                     parsed.lightningSelectors().size());
         }
 
-        private static NodeSelectorConfig parse(ResourceLocation id, JsonObject json, NodeSelectorConfig fallback) {
+        private static NodeSelectorConfig parse(JsonObject json, NodeSelectorConfig fallback) {
             boolean inherit = json.has("inherit_default")
                     ? json.get("inherit_default").getAsBoolean()
                     : fallback.inheritDefault();

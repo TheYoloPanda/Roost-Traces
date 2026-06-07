@@ -19,6 +19,7 @@ public final class RoostTracePlacementScheduler {
     private RoostTracePlacementScheduler() {}
 
     @SubscribeEvent
+    @SuppressWarnings("unused")
     public static void onServerTick(ServerTickEvent.Post event) {
         if (!RoostTracesConfig.PLACEMENT_ENABLED.get()) return;
 

@@ -80,7 +80,7 @@ public final class TraceCompat {
         }
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("rawtypes")
     public static Optional<RecordedTrace> findRecordedTraceInRange(ServerLevel level, BlockPos pivot, int radiusBlocks, Set<ResourceLocation> nodeIds) {
         try {
             Method method = forEachInRange;
@@ -172,7 +172,6 @@ public final class TraceCompat {
                 if (value instanceof BlockState state) return state.getBlock();
             } catch (NoSuchFieldException ignored) {
                 current = current.getSuperclass();
-                continue;
             } catch (IllegalAccessException e) {
                 return null;
             }

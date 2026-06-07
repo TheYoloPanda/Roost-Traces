@@ -37,6 +37,7 @@ public final class RoostBackfillScanner {
     private RoostBackfillScanner() {}
 
     @SubscribeEvent
+    @SuppressWarnings("unused")
     public static void onChunkLoad(ChunkEvent.Load event) {
         if (!RoostTracesConfig.ENABLE_BACKFILL.get()) return;
         if (!(event.getLevel() instanceof ServerLevel level)) return;
