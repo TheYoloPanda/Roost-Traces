@@ -34,6 +34,7 @@ bin/
 
 ### Minecraft Modding ###
 run/
+logs/
 !**/src/**/run/
 **/src/generated/**/.cache/
 repo/
@@ -43,3 +44,8 @@ repo/
 DESCRIPTION.md
 CHANGELOG.md
 changelog.md
+
+### Local Planning ###
+.planning/
+/.codex/
+/.agents/
