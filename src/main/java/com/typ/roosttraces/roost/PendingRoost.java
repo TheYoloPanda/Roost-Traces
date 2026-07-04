@@ -23,4 +23,8 @@ public record PendingRoost(
     public PendingRoost withRetry(long nextAttemptGameTime) {
         return new PendingRoost(key, type, pivotLong, chunkLong, placementSeed, attempts + 1, nextAttemptGameTime);
     }
+
+    public PendingRoost withNextAttempt(long nextAttemptGameTime) {
+        return new PendingRoost(key, type, pivotLong, chunkLong, placementSeed, attempts, nextAttemptGameTime);
+    }
 }

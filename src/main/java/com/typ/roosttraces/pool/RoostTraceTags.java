@@ -14,10 +14,6 @@ public final class RoostTraceTags {
     public static final TagKey<Block> ICE_ROOST_NODES = roostTag("ice_roost_nodes");
     public static final TagKey<Block> LIGHTNING_ROOST_NODES = roostTag("lightning_roost_nodes");
 
-    public static final TagKey<Block> CREATE_REAUTOMATED_ORE_NODES = TagKey.create(
-            Registries.BLOCK,
-            ResourceLocation.fromNamespaceAndPath("createreautomated", "ore_nodes"));
-
     private RoostTraceTags() {}
 
     private static TagKey<Block> roostTag(String path) {

@@ -47,5 +47,6 @@ changelog.md
 
 ### Local Planning ###
 .planning/
-/.codex/
-/.agents/
+.codex/
+.agents/
+src/test/

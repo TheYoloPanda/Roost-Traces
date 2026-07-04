@@ -1,11 +1,12 @@
 package com.typ.roosttraces.pool;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.Map;
+import java.util.Optional;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -36,6 +37,21 @@ public final class RoostTraceNodePoolResolver {
 
     public static void onAddReloadListener(AddReloadListenerEvent event) {
         event.addListener(new Listener());
+    }
+
+    static NodeSelectorConfig parseResourceConfig(Map<ResourceLocation, JsonElement> resources) {
+        NodeSelectorConfig parsed = NodeSelectorConfig.defaults();
+        List<Map.Entry<ResourceLocation, JsonElement>> sortedEntries = new ArrayList<>(resources.entrySet());
+        sortedEntries.sort(Comparator.comparing(entry -> entry.getKey().toString()));
+
+        for (Map.Entry<ResourceLocation, JsonElement> entry : sortedEntries) {
+            if (!entry.getValue().isJsonObject()) {
+                RoostTraces.LOGGER.warn("Ignoring roost node pool {} because it is not a JSON object", entry.getKey());
+                continue;
+            }
+            parsed = parse(entry.getValue().getAsJsonObject(), parsed);
+        }
+        return parsed;
     }
 
     public static List<TraceNodeChoice> resolve(RoostType type) {
@@ -155,6 +171,44 @@ public final class RoostTraceNodePoolResolver {
         output.putIfAbsent(id, new TraceNodeChoice(id, block, TraceCompat.naturalNodeState(block)));
     }
 
+    private static NodeSelectorConfig parse(JsonObject json, NodeSelectorConfig fallback) {
+        boolean inherit = booleanValue(json, "inherit_default", fallback.inheritDefault());
+        return new NodeSelectorConfig(
+                inherit,
+                list(json, "default", fallback.defaultSelectors()),
+                list(json, "fire", fallback.fireSelectors()),
+                list(json, "ice", fallback.iceSelectors()),
+                list(json, "lightning", fallback.lightningSelectors()));
+    }
+
+    private static boolean booleanValue(JsonObject json, String name, boolean fallback) {
+        if (!json.has(name)) return fallback;
+        JsonElement value = json.get(name);
+        if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean()) {
+            return value.getAsBoolean();
+        }
+        RoostTraces.LOGGER.warn("Ignoring roost node pool '{}' because it is not a boolean", name);
+        return fallback;
+    }
+
+    private static List<String> list(JsonObject json, String name, List<String> fallback) {
+        if (!json.has(name)) return fallback;
+        JsonElement value = json.get(name);
+        if (!value.isJsonArray()) {
+            RoostTraces.LOGGER.warn("Ignoring roost node pool '{}' because it is not an array", name);
+            return fallback;
+        }
+        List<String> result = new ArrayList<>();
+        value.getAsJsonArray().forEach(element -> {
+            if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()) {
+                result.add(element.getAsString().toLowerCase(Locale.ROOT));
+            } else {
+                RoostTraces.LOGGER.warn("Ignoring non-string selector in roost node pool '{}': {}", name, element);
+            }
+        });
+        return List.copyOf(result);
+    }
+
     private record SelectorParts(String blockId, String properties) {
     }
 
@@ -173,14 +227,7 @@ public final class RoostTraceNodePoolResolver {
                 return;
             }
 
-            NodeSelectorConfig parsed = NodeSelectorConfig.defaults();
-            for (Map.Entry<ResourceLocation, JsonElement> entry : resources.entrySet()) {
-                if (!entry.getValue().isJsonObject()) {
-                    RoostTraces.LOGGER.warn("Ignoring roost node pool {} because it is not a JSON object", entry.getKey());
-                    continue;
-                }
-                parsed = parse(entry.getValue().getAsJsonObject(), parsed);
-            }
+            NodeSelectorConfig parsed = parseResourceConfig(resources);
             config = parsed;
             RoostTraces.LOGGER.info("Loaded roost trace node pools: inheritDefault={}, default={}, fire={}, ice={}, lightning={}",
                     parsed.inheritDefault(),
@@ -188,31 +235,6 @@ public final class RoostTraceNodePoolResolver {
                     parsed.fireSelectors().size(),
                     parsed.iceSelectors().size(),
                     parsed.lightningSelectors().size());
-        }
-
-        private static NodeSelectorConfig parse(JsonObject json, NodeSelectorConfig fallback) {
-            boolean inherit = json.has("inherit_default")
-                    ? json.get("inherit_default").getAsBoolean()
-                    : fallback.inheritDefault();
-            return new NodeSelectorConfig(
-                    inherit,
-                    list(json, "default", fallback.defaultSelectors()),
-                    list(json, "fire", fallback.fireSelectors()),
-                    list(json, "ice", fallback.iceSelectors()),
-                    list(json, "lightning", fallback.lightningSelectors()));
-        }
-
-        private static List<String> list(JsonObject json, String name, List<String> fallback) {
-            if (!json.has(name)) return fallback;
-            JsonElement value = json.get(name);
-            if (!value.isJsonArray()) return fallback;
-            List<String> result = new ArrayList<>();
-            value.getAsJsonArray().forEach(element -> {
-                if (element.isJsonPrimitive()) {
-                    result.add(element.getAsString().toLowerCase(Locale.ROOT));
-                }
-            });
-            return List.copyOf(result);
         }
     }
 }
