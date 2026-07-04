@@ -1,9 +1,7 @@
 package com.typ.roosttraces.placement;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import com.typ.roosttraces.RoostTraces;
 import com.typ.roosttraces.RoostTracesConfig;
@@ -12,19 +10,104 @@ import com.typ.roosttraces.pool.RoostTraceNodePoolResolver;
 import com.typ.roosttraces.pool.TraceNodeChoice;
 import com.typ.roosttraces.roost.PendingRoost;
 import com.typ.roosttraces.roost.PlacedRoost;
+import com.typ.roosttraces.roost.RoostKeys;
 import com.typ.roosttraces.roost.RoostTraceSavedData;
+import com.typ.roosttraces.roost.RoostType;
+import com.typ.roosttraces.roost.UnindexedPlacedRoost;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class RoostTraceNodePlacer {
     private static final int PLACE_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
+    private static final int INITIAL_PLACEMENT_RETRY_DELAY_TICKS = 20 * 30;
+    private static final int INITIAL_INDEX_RETRY_DELAY_TICKS = 20 * 30;
 
     private RoostTraceNodePlacer() {}
+
+    public static PlacementResult placeDuringWorldgen(WorldGenLevel world, BlockPos pivot, ChunkPos chunkPos, RoostType type) {
+        if (!RoostTracesConfig.PLACEMENT_ENABLED.get() || !RoostTracesConfig.CAPTURE_DURING_WORLDGEN.get()) {
+            return PlacementResult.DISABLED;
+        }
+        if (type == RoostType.UNKNOWN) {
+            if (RoostTracesConfig.DEBUG.get()) {
+                RoostTraces.LOGGER.warn("Skipping dragon roost at {} because its type could not be resolved", pivot);
+            }
+            return PlacementResult.UNKNOWN_ROOST_TYPE;
+        }
+
+        ServerLevel level = world.getLevel();
+        long seed = RoostKeys.placementSeed(pivot, chunkPos, type);
+        List<TraceNodeChoice> pool = RoostTraceNodePoolResolver.resolve(type);
+        if (pool.isEmpty()) {
+            queuePendingFallback(level, pivot, chunkPos, type, seed, PlacementResult.NO_NODE_POOL);
+            return PlacementResult.NO_NODE_POOL;
+        }
+
+        TraceNodeChoice choice = choose(pool, seed);
+        Optional<RoostCandidate> candidate = RoostCandidateScanner.find(world, pivot);
+        if (candidate.isEmpty()) {
+            queuePendingFallback(level, pivot, chunkPos, type, seed, PlacementResult.NO_CANDIDATE);
+            return PlacementResult.NO_CANDIDATE;
+        }
+
+        RoostCandidate found = candidate.get();
+        TraceCompat.suppressGeneratedTrace(world, found.nodePos());
+        Optional<NodePlacement> placement = placeNodeOnly(world, found.nodePos(), choice);
+        if (placement.isEmpty()) {
+            queuePendingFallback(level, pivot, chunkPos, type, seed, PlacementResult.PLACEMENT_FAILED);
+            return PlacementResult.PLACEMENT_FAILED;
+        }
+
+        String key = RoostKeys.key(level.dimension(), pivot);
+        PlacedRoost placed = new PlacedRoost(
+                key,
+                type,
+                pivot.asLong(),
+                found.nodePos().asLong(),
+                found.nodePos().asLong(),
+                choice.nodeId());
+        level.getServer().execute(() -> recordOrQueuePlaced(level, placed));
+
+        if (RoostTracesConfig.DEBUG.get()) {
+            RoostTraces.LOGGER.info("Placed roost node-only trace for {} at {} during worldgen after {} candidate checks",
+                    choice.nodeId(),
+                    found.nodePos(),
+                    found.checkedCandidates());
+        }
+        return PlacementResult.PLACED;
+    }
+
+    private static void queuePendingFallback(
+            ServerLevel level,
+            BlockPos pivot,
+            ChunkPos chunkPos,
+            RoostType type,
+            long seed,
+            PlacementResult reason) {
+        if (!RoostTracesConfig.PLACE_AFTER_CHUNK_GENERATED.get()) return;
+
+        BlockPos savedPivot = pivot.immutable();
+        level.getServer().execute(() -> {
+            PendingRoost pending = pendingRoost(
+                    level,
+                    savedPivot,
+                    chunkPos,
+                    type,
+                    seed,
+                    level.getGameTime() + INITIAL_PLACEMENT_RETRY_DELAY_TICKS);
+            if (RoostTraceSavedData.get(level).addPending(pending) && RoostTracesConfig.DEBUG.get()) {
+                RoostTraces.LOGGER.warn("Queued roost trace placement retry for {} at {} after worldgen result {}",
+                        type.id(), savedPivot, reason);
+            }
+        });
+    }
 
     public static PlacementResult place(ServerLevel level, PendingRoost pending) {
         RoostTraceSavedData data = RoostTraceSavedData.get(level);
@@ -33,44 +116,30 @@ public final class RoostTraceNodePlacer {
         List<TraceNodeChoice> pool = RoostTraceNodePoolResolver.resolve(pending.type());
         if (pool.isEmpty()) return PlacementResult.NO_NODE_POOL;
 
-        Optional<ExistingPair> existingPair = findExistingPair(level, pending.pivot(), pool);
-        if (existingPair.isPresent()) {
-            ExistingPair pair = existingPair.get();
-            if (!pair.indexed() && !TraceCompat.recordTrace(level, pair.tracePos(), pair.nodeId())) {
-                return PlacementResult.TRACE_INDEX_FAILED;
-            }
-            data.markPlaced(new PlacedRoost(
-                    pending.key(),
-                    pending.type(),
-                    pending.pivotLong(),
-                    pair.tracePos().asLong(),
-                    pair.nodePos().asLong(),
-                    pair.nodeId()));
-            return PlacementResult.ALREADY_EXISTS;
-        }
-
         TraceNodeChoice choice = choose(pool, pending.placementSeed());
         Optional<RoostCandidate> candidate = RoostCandidateScanner.find(level, pending.pivot());
         if (candidate.isEmpty()) return PlacementResult.NO_CANDIDATE;
 
         RoostCandidate found = candidate.get();
+        TraceCompat.suppressGeneratedTrace(level, found.nodePos());
         Optional<NodePlacement> placement = placeNodeOnly(level, found.nodePos(), choice);
         if (placement.isEmpty()) {
             return PlacementResult.PLACEMENT_FAILED;
         }
 
-        if (!TraceCompat.recordTrace(level, found.tracePos(), choice.nodeId())) {
-            placement.get().rollback(level);
-            return PlacementResult.TRACE_INDEX_FAILED;
-        }
-
-        data.markPlaced(new PlacedRoost(
+        PlacedRoost placed = new PlacedRoost(
                 pending.key(),
                 pending.type(),
                 pending.pivotLong(),
-                found.tracePos().asLong(),
                 found.nodePos().asLong(),
-                choice.nodeId()));
+                found.nodePos().asLong(),
+                choice.nodeId());
+        if (!TraceCompat.recordNode(level, found.nodePos(), choice.nodeId())) {
+            data.markIndexPending(toUnindexed(placed, 1, nextInitialIndexRetry(level)));
+            return PlacementResult.INDEX_PENDING;
+        }
+
+        data.markPlaced(placed);
 
         if (RoostTracesConfig.DEBUG.get()) {
             RoostTraces.LOGGER.info("Placed roost node-only trace for {} at {} after {} candidate checks",
@@ -82,6 +151,10 @@ public final class RoostTraceNodePlacer {
     }
 
     private static Optional<NodePlacement> placeNodeOnly(ServerLevel level, BlockPos nodePos, TraceNodeChoice choice) {
+        return placeNodeOnly((LevelAccessor) level, nodePos, choice);
+    }
+
+    private static Optional<NodePlacement> placeNodeOnly(LevelAccessor level, BlockPos nodePos, TraceNodeChoice choice) {
         BlockState nodeState = choice.nodeState();
         BlockState air = Blocks.AIR.defaultBlockState();
         BlockState previousNode = level.getBlockState(nodePos);
@@ -113,47 +186,59 @@ public final class RoostTraceNodePlacer {
         return pool.get(index);
     }
 
-    private static Optional<ExistingPair> findExistingPair(ServerLevel level, BlockPos pivot, List<TraceNodeChoice> pool) {
-        int radius = RoostTracesConfig.EXISTING_PAIR_RADIUS.get();
-        Set<ResourceLocation> nodeIds = new HashSet<>();
-        for (TraceNodeChoice choice : pool) nodeIds.add(choice.nodeId());
-        Optional<TraceCompat.RecordedTrace> recordedTrace = TraceCompat.findRecordedTraceInRange(level, pivot, radius, nodeIds);
-        if (recordedTrace.isPresent()) {
-            TraceCompat.RecordedTrace trace = recordedTrace.get();
-            Block blockAtTrace = level.getBlockState(trace.pos()).getBlock();
-            for (TraceNodeChoice choice : pool) {
-                if (choice.nodeId().equals(trace.nodeId()) && choice.nodeBlock() == blockAtTrace) {
-                    return Optional.of(new ExistingPair(trace.nodeId(), trace.pos(), trace.pos(), true));
-                }
-            }
-        }
-
-        int radiusSq = radius * radius;
-        int minY = Math.max(level.getMinBuildHeight(), pivot.getY() - 12);
-        int maxY = Math.min(level.getMaxBuildHeight() - 1, pivot.getY() + 16);
-        BlockPos.MutableBlockPos cur = new BlockPos.MutableBlockPos();
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dz = -radius; dz <= radius; dz++) {
-                if (dx * dx + dz * dz > radiusSq) continue;
-                int x = pivot.getX() + dx;
-                int z = pivot.getZ() + dz;
-                if (!level.hasChunk(x >> 4, z >> 4)) continue;
-                for (int y = minY; y <= maxY; y++) {
-                    cur.set(x, y, z);
-                    Block block = level.getBlockState(cur).getBlock();
-                    for (TraceNodeChoice choice : pool) {
-                        if (choice.nodeBlock() == block && RoostCandidateScanner.canClear(level, cur.above())) {
-                            BlockPos found = cur.immutable();
-                            return Optional.of(new ExistingPair(choice.nodeId(), found, found, false));
-                        }
-                    }
-                }
-            }
-        }
-        return Optional.empty();
+    private static PendingRoost pendingRoost(
+            ServerLevel level,
+            BlockPos pivot,
+            ChunkPos chunkPos,
+            RoostType type,
+            long seed,
+            long nextAttemptGameTime) {
+        return new PendingRoost(
+                RoostKeys.key(level.dimension(), pivot),
+                type,
+                pivot.asLong(),
+                chunkPos.toLong(),
+                seed,
+                0,
+                nextAttemptGameTime);
     }
 
-    private record ExistingPair(ResourceLocation nodeId, BlockPos tracePos, BlockPos nodePos, boolean indexed) {
+    public static IndexResult retryIndexRegistration(ServerLevel level, UnindexedPlacedRoost roost) {
+        BlockPos nodePos = roost.node();
+        if (!TraceCompat.isNodeAt(level, nodePos, roost.nodeId())) {
+            return IndexResult.MISSING_NODE;
+        }
+        if (!TraceCompat.recordNode(level, nodePos, roost.nodeId())) {
+            return IndexResult.RETRY;
+        }
+        RoostTraceSavedData.get(level).markPlaced(roost.asPlaced());
+        return IndexResult.RECORDED;
+    }
+
+    private static void recordOrQueuePlaced(ServerLevel level, PlacedRoost roost) {
+        if (!TraceCompat.recordNode(level, BlockPos.of(roost.nodeLong()), roost.nodeId())) {
+            RoostTraceSavedData.get(level).markIndexPending(toUnindexed(roost, 1, nextInitialIndexRetry(level)));
+            RoostTraces.LOGGER.warn("Placed roost node at {}, but could not register trace index entry for {}; queued retry",
+                    BlockPos.of(roost.nodeLong()), roost.nodeId());
+            return;
+        }
+        RoostTraceSavedData.get(level).markPlaced(roost);
+    }
+
+    private static UnindexedPlacedRoost toUnindexed(PlacedRoost roost, int attempts, long nextAttemptGameTime) {
+        return new UnindexedPlacedRoost(
+                roost.key(),
+                roost.type(),
+                roost.pivotLong(),
+                roost.traceLong(),
+                roost.nodeLong(),
+                roost.nodeId(),
+                attempts,
+                nextAttemptGameTime);
+    }
+
+    private static long nextInitialIndexRetry(ServerLevel level) {
+        return level.getGameTime() + INITIAL_INDEX_RETRY_DELAY_TICKS;
     }
 
     private record NodePlacement(
@@ -163,7 +248,7 @@ public final class RoostTraceNodePlacer {
             BlockState previousAbove,
             boolean clearedAbove) {
 
-        void rollback(ServerLevel level) {
+        void rollback(LevelAccessor level) {
             level.setBlock(nodePos, previousNode, PLACE_FLAGS);
             if (clearedAbove) {
                 level.setBlock(abovePos, previousAbove, PLACE_FLAGS);
@@ -174,9 +259,17 @@ public final class RoostTraceNodePlacer {
     public enum PlacementResult {
         PLACED,
         ALREADY_EXISTS,
+        INDEX_PENDING,
+        DISABLED,
+        UNKNOWN_ROOST_TYPE,
         NO_NODE_POOL,
         NO_CANDIDATE,
-        PLACEMENT_FAILED,
-        TRACE_INDEX_FAILED
+        PLACEMENT_FAILED
+    }
+
+    public enum IndexResult {
+        RECORDED,
+        MISSING_NODE,
+        RETRY
     }
 }

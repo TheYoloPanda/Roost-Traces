@@ -46,7 +46,7 @@ displayName="${mod_name}" #mandatory
 
 # The description text for the mod (multi line!) (#mandatory)
 description='''
-Places one Create ReAutomated Trace and one matching Node inside each Ice and Fire CE dragon roost.
+Adds node-only Create ReAutomated nodes to Ice and Fire CE dragon roosts.
 '''
 
 # The [[mixins]] block allows you to declare your mixin config to FML so that it gets loaded.
@@ -98,14 +98,14 @@ config="${mod_id}.mixins.json"
 [[dependencies.${mod_id}]]
     modId="createreautomated"
     type="required"
-    versionRange="[0.2.0,0.3.0)"
+    versionRange="[0.3.0,0.4.0)"
     ordering="AFTER"
     side="BOTH"
 
 [[dependencies.${mod_id}]]
     modId="createreautomatedtraces"
     type="required"
-    versionRange="[0.2.0,0.3.0)"
+    versionRange="[0.3.0,0.4.0)"
     ordering="AFTER"
     side="BOTH"
 

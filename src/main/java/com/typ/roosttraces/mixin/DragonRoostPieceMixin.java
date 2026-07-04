@@ -1,6 +1,6 @@
 package com.typ.roosttraces.mixin;
 
-import com.typ.roosttraces.roost.RoostPendingRegistry;
+import com.typ.roosttraces.placement.RoostTraceNodePlacer;
 import com.typ.roosttraces.roost.RoostType;
 import com.typ.roosttraces.roost.RoostTypeResolver;
 import org.spongepowered.asm.mixin.Mixin;
@@ -30,6 +30,6 @@ public abstract class DragonRoostPieceMixin {
             CallbackInfo ci) {
         if (!chunkBox.isInside(pivot)) return;
         RoostType type = RoostTypeResolver.fromPiece(this);
-        RoostPendingRegistry.capture(world, pivot, chunkPos, type);
+        RoostTraceNodePlacer.placeDuringWorldgen(world, pivot, chunkPos, type);
     }
 }

@@ -2,5 +2,5 @@ package com.typ.roosttraces.placement;
 
 import net.minecraft.core.BlockPos;
 
-public record RoostCandidate(BlockPos tracePos, BlockPos nodePos, int checkedCandidates, int score) {
+public record RoostCandidate(BlockPos nodePos, int checkedCandidates) {
 }

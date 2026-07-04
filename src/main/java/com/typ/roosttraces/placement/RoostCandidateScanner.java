@@ -13,8 +13,8 @@ import com.typ.roosttraces.pool.RoostTraceTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -26,7 +26,7 @@ public final class RoostCandidateScanner {
 
     private RoostCandidateScanner() {}
 
-    public static Optional<RoostCandidate> find(ServerLevel level, BlockPos pivot) {
+    public static Optional<RoostCandidate> find(LevelAccessor level, BlockPos pivot) {
         int radius = RoostTracesConfig.SCAN_RADIUS.get();
         int maxChecks = RoostTracesConfig.MAX_CANDIDATE_CHECKS_PER_ROOST.get();
         List<Offset> offsets = OFFSETS_BY_RADIUS.computeIfAbsent(radius, RoostCandidateScanner::buildOffsets);
@@ -42,25 +42,24 @@ public final class RoostCandidateScanner {
             BlockPos aboveNode = nodePos.above();
             if (!isValidClearancePosition(level, aboveNode)) continue;
 
-            int score = score(pivot, nodePos, aboveNode, level);
-            return Optional.of(new RoostCandidate(nodePos.immutable(), nodePos.immutable(), checked, score));
+            return Optional.of(new RoostCandidate(nodePos.immutable(), checked));
         }
 
         return Optional.empty();
     }
 
-    public static boolean canClear(ServerLevel level, BlockPos pos) {
+    public static boolean canClear(LevelAccessor level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
         return state.isAir() || isClearable(state) || isRoostReplaceable(state);
     }
 
-    private static boolean isValidNodePosition(ServerLevel level, BlockPos pos) {
+    private static boolean isValidNodePosition(LevelAccessor level, BlockPos pos) {
         if (level.getBlockEntity(pos) != null) return false;
         BlockState state = level.getBlockState(pos);
         return isRoostReplaceable(state);
     }
 
-    private static boolean isValidClearancePosition(ServerLevel level, BlockPos pos) {
+    private static boolean isValidClearancePosition(LevelAccessor level, BlockPos pos) {
         if (level.getBlockEntity(pos) != null) return false;
         BlockState state = level.getBlockState(pos);
         if (state.getFluidState().isSource()) return false;
@@ -91,17 +90,8 @@ public final class RoostCandidateScanner {
                 || state.is(Blocks.GLOW_LICHEN);
     }
 
-    private static boolean isChunkLoaded(ServerLevel level, BlockPos pos) {
+    private static boolean isChunkLoaded(LevelAccessor level, BlockPos pos) {
         return level.hasChunk(pos.getX() >> 4, pos.getZ() >> 4);
-    }
-
-    private static int score(BlockPos pivot, BlockPos nodePos, BlockPos aboveNode, ServerLevel level) {
-        int dx = nodePos.getX() - pivot.getX();
-        int dz = nodePos.getZ() - pivot.getZ();
-        int dy = nodePos.getY() - pivot.getY();
-        int score = (dx * dx + dz * dz) * 4 + dy * dy;
-        if (!level.getBlockState(aboveNode).isAir()) score += 40;
-        return score;
     }
 
     private static List<Offset> buildOffsets(int radius) {

@@ -27,6 +27,7 @@ sourceSets.main.resources {
 }
 
 repositories {
+    mavenCentral()
     // Mod jars published on Modrinth Maven.
     maven { url = "https://api.modrinth.com/maven" }
     // Create + Ponder + Flywheel.
@@ -128,21 +129,30 @@ configurations {
     runtimeClasspath.extendsFrom localRuntime
 }
 
+def createReAutomatedTracesDependency = "maven.modrinth:3BTcgJjC:${createreautomatedtraces_version}"
+
 dependencies {
     // Required runtime mods for the development client. mods.toml declares load
     // requirements; these Gradle entries are what actually put jars on the run classpath.
-    localRuntime "maven.modrinth:iceandfire-ce:${iceandfire_version}"
-    localRuntime "maven.modrinth:uranus:${uranus_neoforge_modrinth_maven_version}"
-    localRuntime "maven.modrinth:jupiter:${jupiter_version}"
+    localRuntime "maven.modrinth:VpmCsizY:${iceandfire_version}"
+    localRuntime "maven.modrinth:3Acxy864:${uranus_version}"
+    localRuntime "maven.modrinth:XbiLGMMU:${jupiter_version}"
 
     localRuntime "maven.modrinth:create-reautomated:${createreautomated_version}"
-    localRuntime "maven.modrinth:create-reautomated-traces:${createreautomatedtraces_version}"
+    localRuntime createReAutomatedTracesDependency
+    compileOnly createReAutomatedTracesDependency
 
     localRuntime("com.simibubi.create:create-${minecraft_version}:${create_version}:slim") { transitive = false }
-    localRuntime "net.createmod.ponder:ponder-neoforge:${ponder_version}+mc${minecraft_version}"
+    localRuntime "net.createmod.ponder:ponder-neoforge:${ponder_version}"
     localRuntime "dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_version}"
     localRuntime "com.tterrag.registrate:Registrate:${registrate_version}"
+
+    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.11.4"
 }
+
+sourceSets.test.compileClasspath += sourceSets.main.compileClasspath
+sourceSets.test.runtimeClasspath += sourceSets.main.runtimeClasspath
 
 // This block of code expands all declared replace properties in the specified resource targets.
 // A missing property will result in an error. Properties are expanded using ${} Groovy notation.
@@ -185,6 +195,10 @@ publishing {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
     options.compilerArgs.add('-Xlint:deprecation')
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
 }
 
 // IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.

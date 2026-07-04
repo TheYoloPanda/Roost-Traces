@@ -25,6 +25,7 @@ public final class RoostTracesConfig {
     public static final ModConfigSpec.BooleanValue CAPTURE_DURING_WORLDGEN;
     public static final ModConfigSpec.BooleanValue PLACE_AFTER_CHUNK_GENERATED;
     public static final ModConfigSpec.IntValue SCAN_RADIUS;
+    // Legacy config entry kept readable for old common config files.
     public static final ModConfigSpec.IntValue EXISTING_PAIR_RADIUS;
     public static final ModConfigSpec.IntValue MAX_PENDING_ROOSTS_PER_TICK;
     public static final ModConfigSpec.IntValue MAX_CANDIDATE_CHECKS_PER_ROOST;
